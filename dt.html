@@ -381,6 +381,8 @@
 <div class="copyright-line">Ứng dụng này thuộc sở hữu của Ủy ban Kiểm tra Đảng ủy xã Triệu Việt Vương.</div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- Kênh dự phòng: MQTT qua WebSocket (trình duyệt không có WebRTC như Mi/Vivo/UC vẫn dùng được) -->
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5/dist/mqtt.min.js"></script>
 <script>
 // ============ ĐIỆN THOẠI ĐỘI CHƠI - kết nối tới màn hình chính qua PeerJS ============
 const PEER_PREFIX = 'ukttvq-';
@@ -400,10 +402,21 @@ let myPick = null;           // {qid, choice} đáp án của đội này
 let peer = null;
 let conn = null;
 let connCreatedAt = 0;
+let peerCreatedAt = 0;
 let qStartTs = 0;
 let everConnected = false;
 let timerIv = null;
 let audioCtx = null;
+// ---- KÊNH DỰ PHÒNG: MQTT QUA WEBSOCKET ----
+// Tự dùng khi trình duyệt thiếu WebRTC (Mi/Vivo/UC Browser...) hoặc WebRTC không nối được.
+const MQTT_URL = 'wss://broker.emqx.io:8084/mqtt';
+const forceBus = qs.get('bus') === '1';   // ?bus=1 → ép dùng kênh dự phòng (thử nghiệm)
+let usingFallback = false;
+let mqttClient = null;
+let peerUnavailableCount = 0;
+const myClientId = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function mqttUp() { return 'ukttvq/' + roomCode + '/up'; }
+function mqttDown() { return 'ukttvq/' + roomCode + '/down'; }
 
 // ---------- TIỆN ÍCH ----------
 function $(id) { return document.getElementById(id); }
@@ -445,13 +458,18 @@ function send(msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) {}
 
 // ---------- KẾT NỐI ----------
 function connect() {
-  roomCode = (($('codeInput').value || roomCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '')).slice(0, 6);
+  const newCode = (($('codeInput').value || roomCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '')).slice(0, 6);
+  if (newCode !== roomCode) {          // đổi mã phòng → bắt đầu lại từ đầu
+    roomCode = newCode;
+    teardownMqtt(); teardownPeer();
+    usingFallback = false; peerUnavailableCount = 0; everConnected = false;
+  }
+  roomCode = newCode;
   if (roomCode.length < 4) { setStatus('Nhập mã phòng 6 ký tự hiện trên màn hình lớn.', 'err'); return; }
   try { localStorage.setItem('uktt_room', roomCode); } catch (e) {}
   $('codeInput').value = roomCode;
-  if (typeof Peer === 'undefined') {
-    setStatus('⚠️ Không tải được thư viện kết nối. Kiểm tra internet rồi bấm Kết nối lại.', 'err');
-    setNet('bad', '⚠️ Lỗi thư viện');
+  if (typeof Peer === 'undefined' || forceBus) {
+    startMqttFallback(typeof Peer === 'undefined' ? 'no-peer-lib' : 'forced');
     return;
   }
   setStatus('Đang kết nối tới mã phòng ' + roomCode + '...');
@@ -464,6 +482,7 @@ function teardownPeer() {
 }
 function startPeer() {
   teardownPeer();
+  peerCreatedAt = Date.now();
   peer = new Peer();
   peer.on('open', () => {
     setStatus('Đang ghép cặp với màn hình chính...');
@@ -472,28 +491,29 @@ function startPeer() {
   peer.on('disconnected', () => { try { if (peer) peer.reconnect(); } catch (e) {} });
   peer.on('error', (err) => {
     const t = err && err.type;
+    // Trình duyệt không có WebRTC (Mi/Vivo/UC...) → kênh dự phòng ngay
+    if (t === 'browser-incompatible') { startMqttFallback(t); return; }
     if (t === 'peer-unavailable') {
+      peerUnavailableCount++;
       setNet('bad', '❌ Không thấy màn hình');
       setStatus('❌ Không tìm thấy màn hình chính. Kiểm tra lại mã phòng (màn hình bấm 📱 Kết nối ĐT).', 'err');
       if (conn) { try { conn.close(); } catch (e) {} conn = null; }
-    } else if (t === 'unavailable-id') {
-      setTimeout(() => { if (!peer || !peer.open) startPeer(); }, 800);
-    } else if (t !== 'peer-unavailable') {
-      setNet('bad', '⚠️ Đang thử lại');
-      setStatus('⚠️ Lỗi kết nối (' + (t || '?') + ') – đang thử lại...', 'err');
+      if (peerUnavailableCount >= 2) startMqttFallback(t);
+      return;
     }
+    if (t === 'unavailable-id') {
+      setTimeout(() => { if (!peer || !peer.open) startPeer(); }, 800);
+      return;
+    }
+    // Lỗi khác (mạng, server...) → chuyển sang kênh dự phòng
+    startMqttFallback(t || 'error');
   });
 }
-function openConn() {
-  if (!peer || !peer.open) return;
-  if (conn) return;
-  let c;
-  try { c = peer.connect(PEER_PREFIX + roomCode, { reliable: true }); } catch (e) { return; }
-  conn = c;
-  connCreatedAt = Date.now();
+// Đăng ký xử lý cho một kết nối (PeerJS hoặc kênh dự phòng)
+function wireConn(c) {
   c.on('open', () => {
     everConnected = true;
-    setNet('ok', '🟢 Đã kết nối');
+    setNet('ok', usingFallback ? '🟢 Kênh dự phòng' : '🟢 Đã kết nối');
     setStatus('Đã kết nối màn hình chính!', 'ok');
     send({ type: 'hello' });
     if (team) send({ type: 'join', team: team });
@@ -508,16 +528,98 @@ function openConn() {
   });
   c.on('error', () => { if (conn === c) conn = null; });
 }
+function openConn() {
+  if (usingFallback) return;
+  if (!peer || !peer.open) return;
+  if (conn) return;
+  let c;
+  try { c = peer.connect(PEER_PREFIX + roomCode, { reliable: true }); } catch (e) { return; }
+  conn = c;
+  connCreatedAt = Date.now();
+  wireConn(c);
+}
+
+// ---------- KÊNH DỰ PHÒNG: MQTT QUA WEBSOCKET ----------
+// Dùng TỰ ĐỘNG khi trình duyệt không có WebRTC (Mi/Vivo/UC Browser...) hoặc WebRTC
+// không nối được. Tin nhắn đi qua máy chủ trung gian công khai — giao diện giữ nguyên.
+function publishUp(m) {
+  try {
+    if (mqttClient && mqttClient.connected) mqttClient.publish(mqttUp(), JSON.stringify({ from: myClientId, msg: m }));
+  } catch (e) {}
+}
+function makeMqttConn() {
+  return {
+    kind: 'mqtt', open: false, _h: {},
+    on(ev, fn) { this._h[ev] = fn; },
+    _emit(ev, a) { const f = this._h[ev]; if (f) try { f(a); } catch (e) {} },
+    send(m) { publishUp(m); }
+  };
+}
+function teardownMqtt() {
+  if (mqttClient) { const c = mqttClient; mqttClient = null; try { c.end(true); } catch (e) {} }
+  if (conn && conn.kind === 'mqtt') { conn.open = false; conn = null; }
+  usingFallback = false;
+}
+function startMqttFallback(reason) {
+  if (usingFallback && mqttClient) return;
+  usingFallback = true;
+  teardownPeer();                       // dừng PeerJS để không chạy song song
+  if (typeof mqtt === 'undefined') {
+    setNet('bad', '⚠️ Lỗi thư viện');
+    setStatus('⚠️ Trình duyệt này thiếu WebRTC và không tải được thư viện dự phòng. Thử Chrome/Safari bản mới.', 'err');
+    return;
+  }
+  setNet('', '⏳ Kênh dự phòng');
+  setStatus('Trình duyệt này dùng chế độ dự phòng. Đang kết nối tới mã phòng ' + roomCode + '...');
+  let c;
+  try { c = mqtt.connect(MQTT_URL, { clientId: myClientId, connectTimeout: 8000, reconnectPeriod: 5000, keepalive: 25 }); }
+  catch (e) { setStatus('⚠️ Không mở được kênh dự phòng. Kiểm tra internet rồi bấm Kết nối lại.', 'err'); return; }
+  mqttClient = c;
+  c.on('connect', () => {
+    c.subscribe(mqttDown(), { qos: 0 });
+    publishUp({ type: 'hello' });        // dò màn hình chính
+    setStatus('Đã tới máy chủ trung gian – đang chờ màn hình chính trả lời...');
+    setTimeout(() => {
+      if (usingFallback && (!conn || !conn.open)) {
+        setNet('bad', '❌ Chưa thấy màn hình');
+        setStatus('Đã kết nối trung gian nhưng CHƯA thấy màn hình chính. Kiểm tra máy trình chiếu đang mở và mã phòng.', 'err');
+      }
+    }, 8000);
+  });
+  c.on('message', (topic, payload) => {
+    let o = null;
+    try { o = JSON.parse(payload.toString()); } catch (e) { return; }
+    if (!o || typeof o !== 'object') return;
+    if (o.to && o.to !== myClientId) return;      // tin nhắn riêng gửi cho máy khác
+    const m = o.msg;
+    if (!m || typeof m !== 'object') return;
+    if (!conn || conn.kind !== 'mqtt') { conn = makeMqttConn(); wireConn(conn); }
+    if (!conn.open) { conn.open = true; conn._emit('open'); }   // lần đầu thấy màn hình chính
+    conn._emit('data', m);
+  });
+  c.on('close', () => {
+    if (conn && conn.kind === 'mqtt' && conn.open) { conn.open = false; conn._emit('close'); }
+  });
+  c.on('error', () => { /* thư viện tự thử lại */ });
+}
 // Giữ kết nối sống: tự nối lại khi rớt
 setInterval(() => {
   if (!roomCode) return;
+  if (usingFallback) {
+    // Kênh dự phòng: thư viện MQTT tự nối lại khi rớt
+    if (mqttClient && !mqttClient.connected && conn && conn.open) { conn.open = false; }
+    return;
+  }
   if (!peer || peer.destroyed) { if (everConnected || roomCode) startPeer(); return; }
   if (!peer.open) { try { peer.reconnect(); } catch (e) {} return; }
-  if (!conn) { openConn(); return; }
+  if (!conn) {
+    // Peer mở mà10s vẫn chưa tạo được kết nối → kênh dự phòng
+    if (peer.open && Date.now() - peerCreatedAt > 10000) { startMqttFallback('no-conn'); return; }
+    openConn(); return;
+  }
   if (!conn.open && Date.now() - connCreatedAt > 12000) {
-    try { conn.close(); } catch (e) {}
-    conn = null;
-    openConn();
+    // WebRTC mở nhưng12s chưa xong (thường do mạng chặn) → kênh dự phòng
+    startMqttFallback('ice-timeout');
   }
 }, 4000);
 document.addEventListener('visibilitychange', () => {
@@ -563,7 +665,7 @@ function onHostData(d) {
     return;
   }
   if (d.type === 'clear') { cur = null; myPick = null; render(); return; }
-  if (d.type === 'ping') return;
+  if (d.type === 'ping') { send({ type: 'pong' }); return; }   // giữ kết nối sống
 }
 
 // ---------- TRẢ LỜI ----------
@@ -585,6 +687,7 @@ function changeTeam() {
 }
 function backToCode() {
   teardownPeer();
+  teardownMqtt();
   everConnected = false;
   setNet('', '⏳ Chưa kết nối');
   setStatus('Nhập mã phòng 6 ký tự hiện trên màn hình lớn.');
@@ -600,7 +703,8 @@ function doShake(el) {
 // ---------- HIỂN THỊ ----------
 function render() {
   updateHead();
-  if (!peer || !peer.open || !conn || !conn.open) {
+  const online = usingFallback ? !!(conn && conn.open) : !!(peer && peer.open && conn && conn.open);
+  if (!online) {
     if ($('codeInput') && document.activeElement !== $('codeInput')) $('codeInput').value = roomCode;
     show('viewConnect');
     stopTimer();
@@ -617,7 +721,7 @@ function updateHead() {
   $('headName').textContent = team ? teamName(team) : 'Chưa chọn đội';
 }
 function renderWait() {
-  $('scorePill2').textContent = (scores[team] || 0) + ' ✓ câu đúng';
+  $('scorePill2').textContent = (scores[team] || 0) + ' điểm';
   $('waitMsg').textContent = 'Đang chờ Người dẫn chương trình mở câu hỏi. Điện thoại sẽ tự hiện câu hỏi ngay khi màn hình lớn chuyển câu.';
 }
 function renderTeamGrid() {
@@ -643,7 +747,7 @@ function renderQuestion() {
   const q = cur;
   $('qMeta').textContent = 'CÂU ' + q.qNum + '/' + q.total + ' • BỘ ' + q.setNum;
   $('qText').textContent = q.text;
-  $('scorePill').textContent = (scores[team] || 0) + ' ✓ câu đúng';
+  $('scorePill').textContent = (scores[team] || 0) + ' điểm';
 
   const grid = $('opts');
   grid.innerHTML = '';
@@ -671,7 +775,8 @@ function renderQuestion() {
   if (my && my.correct) {
     res.style.display = 'block';
     res.className = 'result win';
-    res.innerHTML = '✅ ĐỘI BẠN TRẢ LỜI ĐÚNG!<br>Sau ' + fmtSec(my.sec)
+    res.innerHTML = '✅ ĐỘI BẠN TRẢ LỜI ĐÚNG!'
+      + (my.pts !== undefined ? ' — +' + my.pts + ' điểm' : '') + '<br>Sau ' + fmtSec(my.sec)
       + '<small>' + (done ? 'Phương án ' + String.fromCharCode(65 + q.correct) + ' là đáp án đúng'
         : 'Phương án ' + String.fromCharCode(65 + my.choice) + ' – chờ đủ đội để màn hình công bố đáp án') + '</small>';
   } else if (my) {
@@ -705,7 +810,8 @@ function renderQuestion() {
     const row = document.createElement('div');
     row.className = 'other-row' + (k === team ? ' mine' : '');
     let right;
-    if (a && a.correct) right = '<span class="ok">✅ ' + fmtSec(a.sec) + '</span>';
+    if (a && a.correct) right = '<span class="ok">✅ ' + fmtSec(a.sec)
+      + (a.pts !== undefined ? ' <b>+' + a.pts + '</b>' : '') + '</span>';
     else if (a) right = '<span class="no">❌ sai</span>';
     else right = done ? '<span class="none">không trả lời</span>' : '<span class="none">chưa</span>';
     row.innerHTML = '<span>' + escapeHtml(teamName(k)) + (k === team ? ' (bạn)' : '') + '</span>' + right;
@@ -714,7 +820,8 @@ function renderQuestion() {
 }
 function progressText(q) {
   const n = TEAM_KEYS.filter(k => q.results && q.results[k]).length;
-  return 'Đã có ' + n + '/4 đội trả lời';
+  const right = TEAM_KEYS.filter(k => q.results && q.results[k] && q.results[k].correct).length;
+  return 'Đã có ' + n + '/4 đội trả lời • ✅ ' + right + ' đội đúng';
 }
 function startTimer() {
   if (timerIv) return;
