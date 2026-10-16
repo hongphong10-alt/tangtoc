@@ -34,6 +34,11 @@ HỘI THI CÁN BỘ KIỂM TRA GIỎI - XÃ TRIỆU VIỆT VƯƠNG 2026
   Sai hoặc không trả lời: 0 điểm. Mỗi câu hiện "✅ X/4 đội đúng".
 • VÀO BỘ ĐỀ: hiện MÀN KẾT NỐI 4 ĐỘI trước → người dẫn bấm Đóng
   (đủ đội đã vào) mới hiện CÂU HỎI SỐ 1
+• HẾT BỘ ĐỀ → 3 MÀN RIÊNG BIỆT (3s → 13s → 18s):
+  1) 🏆 CHÚC MỪNG HAI ĐỘI đã hoàn thành phần thi
+  2) 📊 BẢNG TỔNG KẾT: số câu trả lời đúng + tổng điểm từng đội,
+     xếp TỪ CAO XUỐNG THẤP (riêng biệt, không kèm lời mời)
+  3) ⏳ Lời mời Hai đội tiếp theo / Hai đội vào vị trí (bảng đã ẩn)
 • Người dẫn vẫn bấm chuột được (dự phòng): sai 2 lần → hiện đáp án
 • Chip "Số câu đúng" A/B/C/D chạy điểm thật sau mỗi câu
 • Panel "📱 Kết nối ĐT": QR code, mã phòng, ô sửa link dt.html,

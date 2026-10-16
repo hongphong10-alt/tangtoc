@@ -847,7 +847,68 @@
   .finish-overlay .start-card {
     position: relative;
     z-index: 2;
+    max-height: calc(100vh - 170px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--gold-border) transparent;
   }
+  .finish-overlay .start-card::-webkit-scrollbar { width: 8px; }
+  .finish-overlay .start-card::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 8px; }
+  /* Bang tong ket so cau dung + diem tung doi, xep cao -> thap */
+  .standings {
+    display: none;
+    margin: 2px auto 0;
+    width: min(560px, 92%);
+    background: rgba(0,0,0,0.55);
+    border: 1px solid var(--gold-border);
+    border-radius: 14px;
+    padding: 8px 14px 7px;
+    text-align: left;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  }
+  .standings.show { display: block; animation: stIn .55s ease both; }
+  @keyframes stIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .standings-title {
+    text-align: center;
+    color: var(--gold);
+    font-weight: 900;
+    letter-spacing: 4px;
+    font-size: 17px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .standings-title { display: none; }
+  .standings-head, .st-row {
+    display: grid;
+    grid-template-columns: 54px 1fr 96px 84px;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+  }
+  .standings-head {
+    color: var(--gold-light);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    border-bottom: 1px solid var(--gold-border);
+  }
+  .standings-head .st-col { text-align: right; }
+  .st-row {
+    border-bottom: 1px dashed rgba(248,192,36,0.18);
+    font-size: 17px;
+    opacity: 0;
+    animation: stRow .45s ease forwards;
+  }
+  .st-row:last-child { border-bottom: none; }
+  @keyframes stRow { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+  .st-rank { font-size: 20px; text-align: center; }
+  .st-name { color: #fff; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st-col { text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; }
+  .st-correct { color: #7dffb0; }
+  .st-points { color: var(--gold); font-size: 20px; }
+  .st-row.top1 { background: linear-gradient(90deg, rgba(248,192,36,0.22), transparent 75%); border-radius: 8px; }
+  .st-row.top2 { background: linear-gradient(90deg, rgba(198,204,214,0.16), transparent 75%); border-radius: 8px; }
+  .st-row.top3 { background: linear-gradient(90deg, rgba(205,127,50,0.18), transparent 75%); border-radius: 8px; }
   /* Cúp vàng trên nền tròn vàng - không dùng gradient-text để emoji luôn hiển thị */
   .finish-trophy {
     font-size: 68px;
@@ -1438,6 +1499,13 @@
     <div class="finish-trophy" id="finishTrophy">🏆</div>
     <h1 id="finishTitle">CHÚC MỪNG HAI ĐỘI</h1>
     <div class="intro-tagline" id="finishTagline" style="margin-bottom: 34px;">đã hoàn thành phần thi của mình!</div>
+    <div class="standings" id="standingsBoard">
+      <div class="standings-head">
+        <span class="st-rank">#</span><span class="st-team">ĐỘI</span>
+        <span class="st-col">CÂU ĐÚNG</span><span class="st-col">ĐIỂM</span>
+      </div>
+      <div class="standings-rows" id="standingsRows"></div>
+    </div>
   </div>
     <button class="start-btn-big fade-btn" id="btnNextSet" style="margin-top: 34px;" onclick="openSetPanel()">📚 CHỌN BỘ CÂU HỎI</button>
 </div>
@@ -1808,6 +1876,7 @@ function openSetPanel() {
   stopQuestionWaitMusic();
   clearTimeout(finishPhaseTimer);
   clearTimeout(finishPhaseTimer2);
+clearTimeout(finishPhaseTimer3);
   document.getElementById('finishOverlay').classList.remove('show');
   document.getElementById('setPanelOverlay').classList.add('show');
   renderSetGrid();
@@ -1922,7 +1991,8 @@ function switchToSet(idx) {
 // Chọn thật ngẫu nhiên một bộ chưa thi; số dừng và nội dung là cùng một bộ.
 let btnNextSetTimer = null; // hẹn giờ hiện nút chọn bộ tiếp theo trên màn chúc mừng
 let finishPhaseTimer = null; // hẹn giờ đổi giai đoạn màn chúc mừng
-let finishPhaseTimer2 = null; // hẹn giờ giai đoạn 3 (mời hai đội vào vị trí)
+let finishPhaseTimer2 = null;
+let finishPhaseTimer3 = null;  // hen gio man moi Hai doi vao vi tri // hẹn giờ giai đoạn 3 (mời hai đội vào vị trí)
 
 // Màn chúc mừng 3 giai đoạn:
 //   Giai đoạn 1 (0-3s): 🏆 CHÚC MỪNG HAI ĐỘI - đã hoàn thành phần thi của mình.
@@ -1933,19 +2003,73 @@ function setFinishPhase(phase) {
   const title = document.getElementById('finishTitle');
   const org = document.getElementById('finishOrg');
   const tagline = document.getElementById('finishTagline');
-  if (phase >= 2) {
+  const board = document.getElementById('standingsBoard');
+  const logoWrap = document.querySelector('#finishOverlay .intro-logo-wrap');
+  if (phase === 2) {
+    // ===== MÀN RIÊNG 2: BẢNG TỔNG KẾT =====
+    // Chỉ hiện bảng xếp hạng (số câu đúng + điểm, cao→thấp) — KHÔNG kèm lời mời đội.
+    trophy.textContent = '📊';
+    title.style.visibility = '';
+    title.textContent = 'BẢNG TỔNG KẾT';
+    org.style.display = 'none';
+    if (logoWrap) logoWrap.style.display = 'none';
+    trophy.style.width = '84px'; trophy.style.height = '84px'; trophy.style.fontSize = '44px';
+    tagline.style.marginBottom = '14px';
+    tagline.textContent = 'Số câu trả lời đúng và tổng điểm của từng đội — xếp từ cao xuống thấp';
+    renderStandings();
+  } else if (phase >= 3) {
+    // ===== MÀN RIÊNG 3: LỜI MỜI HAI ĐỘI =====
+    // Bảng tổng kết đã kết thúc (ẩn đi) → không còn liên quan màn mời đội.
+    if (board) board.classList.remove('show');
     trophy.textContent = '⏳';
-    // visibility hidden (không display:none) để giữ nguyên chỗ, card không đổi kích thước
     title.style.visibility = 'hidden';
     org.style.display = 'none';
-    tagline.textContent = phase === 3 ? 'Mời Hai đội vào vị trí'
+    if (logoWrap) logoWrap.style.display = '';
+    trophy.style.width = ''; trophy.style.height = ''; trophy.style.fontSize = '';
+    tagline.style.marginBottom = '';
+    tagline.textContent = phase === 4 ? 'Mời Hai đội vào vị trí'
       : 'Mời Hai đội tiếp theo lên sân khấu chuẩn bị thi';
   } else {
+    // ===== MÀN RIÊNG 1: CHÚC MỪNG =====
+    if (board) board.classList.remove('show');
+    title.textContent = 'CHÚC MỪNG HAI ĐỘI';
     trophy.textContent = '🏆';
     title.style.visibility = '';
     org.style.display = '';
+    const logoWrap1 = document.querySelector('#finishOverlay .intro-logo-wrap');
+    if (logoWrap1) logoWrap1.style.display = '';
+    trophy.style.width = ''; trophy.style.height = ''; trophy.style.fontSize = '';
+    const tg1 = document.getElementById('finishTagline');
+    if (tg1) tg1.style.marginBottom = '';
     tagline.textContent = 'đã hoàn thành phần thi của mình!';
   }
+}
+// BANG TONG KET: so cau tra loi DUNG + diem tung doi, xep tu cao den thap.
+// Hien sau man chuc mung 2 doi (phase 2 cua man chuc mung).
+function renderStandings() {
+  const rows = TEAM_KEYS.map(k => ({
+    k: k,
+    name: teamNames[k] || ('Đội ' + k),
+    correct: teamCorrects[k] || 0,
+    pts: teamScores[k] || 0
+  }));
+  rows.sort((a, b) => (b.pts - a.pts) || (b.correct - a.correct) || (a.k < b.k ? -1 : 1));
+  const medals = ['🥇', '🥈', '🥉', '4️⃣'];
+  const box = document.getElementById('standingsRows');
+  if (!box) return;
+  box.innerHTML = '';
+  rows.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'st-row' + (i < 3 ? ' top' + (i + 1) : '');
+    div.style.animationDelay = (0.35 + i * 0.3) + 's';
+    div.innerHTML =
+      '<span class="st-rank">' + medals[i] + '</span>' +
+      '<span class="st-name">' + escapeHtml(r.name) + '</span>' +
+      '<span class="st-col st-correct">' + r.correct + ' câu</span>' +
+      '<span class="st-col st-points">' + r.pts + '</span>';
+    box.appendChild(div);
+  });
+  document.getElementById('standingsBoard').classList.add('show');
 }
 function randomPickSet() {
   const available = [];
@@ -2081,8 +2205,15 @@ function finishCurrentSet() {
   setFinishPhase(1);
   clearTimeout(finishPhaseTimer);
   clearTimeout(finishPhaseTimer2);
+clearTimeout(finishPhaseTimer3);
+  document.getElementById('standingsBoard').classList.remove('show');
+  // Timeline 3 man RIENG:
+  //   0-3s   : MÀN 1 - CHÚC MỪNG HAI ĐỘI
+  //   3-13s  : MÀN 2 - BẢNG TỔNG KẾT (số câu đúng + điểm, xếp cao→thấp) — riêng biệt
+  //   từ 13s : MÀN 3 - LỜI MỜI HAI ĐỘI (bảng tổng kết đã ẩn, không còn liên quan)
   finishPhaseTimer = setTimeout(() => setFinishPhase(2), 3000);
-  finishPhaseTimer2 = setTimeout(() => setFinishPhase(3), 7000);
+  finishPhaseTimer2 = setTimeout(() => setFinishPhase(3), 13000);
+  finishPhaseTimer3 = setTimeout(() => setFinishPhase(4), 18000);
 }
 
 function scheduleFinishAfterAnswer(delay = 8000) {
@@ -2692,6 +2823,7 @@ function escapeHtml(s) {
 
 let teamNames = Object.assign({ A: 'Đội A', B: 'Đội B', C: 'Đội C', D: 'Đội D' }, lsGetJSON('uktt_team_names', {}));
 let teamScores = Object.assign({ A: 0, B: 0, C: 0, D: 0 }, lsGetJSON('uktt_team_scores', {}));
+let teamCorrects = Object.assign({ A: 0, B: 0, C: 0, D: 0 }, lsGetJSON('uktt_team_corrects', {}));  // so cau tra loi DUNG (tinh lap)
 let teamConns = {};          // 'A'..'D' → DataConnection đang mở
 let allConns = [];           // mọi kết nối điện thoại đang có
 let hostPeer = null;
@@ -2900,8 +3032,9 @@ function fallbackCopyTxt(txt, done) {
 }
 function resetTeamScores() {
   soundClick();
-  TEAM_KEYS.forEach(k => { teamScores[k] = 0; });
+  TEAM_KEYS.forEach(k => { teamScores[k] = 0; teamCorrects[k] = 0; });
   lsSetJSON('uktt_team_scores', teamScores);
+  lsSetJSON('uktt_team_corrects', teamCorrects);
   renderTeamStrip();
   broadcastMsg(teamsPayload());
   refreshRoomPanel();
@@ -3249,8 +3382,10 @@ function awardTeamPoints() {
   correctTeams.forEach((k, i) => {
     rec.teams[k].pts = POINTS[i] !== undefined ? POINTS[i] : 2;
     teamScores[k] += rec.teams[k].pts;
+    teamCorrects[k] = (teamCorrects[k] || 0) + 1;   // tinh so cau DUNG cho bang tong ket
   });
   lsSetJSON('uktt_team_scores', teamScores);
+  lsSetJSON('uktt_team_corrects', teamCorrects);
 }
 
 // Câu đã có đáp án → đóng băng đồng hồ + báo kết quả cho 4 điện thoại
