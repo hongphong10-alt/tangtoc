@@ -29,6 +29,11 @@ HỘI THI CÁN BỘ KIỂM TRA GIỎI - XÃ TRIỆU VIỆT VƯƠNG 2026
   kèm SỐ GIÂY đã dùng (⏱), đội trả lời SAI hiện đỏ
 • LUẬT MỚI: KHÔNG hiện đáp án khi có đội đúng → chờ ĐỦ số đội
   đã kết nối trả lời mới tự công bố đáp án
+• ĐIỂM THEO TỐC ĐỘ (chốt khi công bố đáp án):
+  +5 đúng nhanh nhất • +4 đúng nhì • +3 đúng ba • +2 đúng sau cùng
+  Sai hoặc không trả lời: 0 điểm. Mỗi câu hiện "✅ X/4 đội đúng".
+• VÀO BỘ ĐỀ: hiện MÀN KẾT NỐI 4 ĐỘI trước → người dẫn bấm Đóng
+  (đủ đội đã vào) mới hiện CÂU HỎI SỐ 1
 • Người dẫn vẫn bấm chuột được (dự phòng): sai 2 lần → hiện đáp án
 • Chip "Số câu đúng" A/B/C/D chạy điểm thật sau mỗi câu
 • Panel "📱 Kết nối ĐT": QR code, mã phòng, ô sửa link dt.html,
@@ -56,6 +61,10 @@ BƯỚC 4: Chọn bộ câu hỏi, bấm câu hỏi như bình thường.
 BƯỚC 5: Bấm sang câu tiếp theo, lặp lại. Hết câu → 🏁.
 
 ⚠️ LƯU Ý QUAN TRỌNG:
+- TRÌNH DUYỆT ĐIỆN THOẠI: nên dùng Chrome / Safari / Edge. Với trình duyệt
+  không có WebRTC (Mi Browser, Vivo, UC...), ứng dụng TỰ CHUYỂN sang kênh
+  dự phòng (WebSocket) → vẫn chạy bình thường, chỉ hơi trễ vài phần trăm giây.
+- Muốn ép kênh dự phòng ngay: thêm ?bus=1 vào cuối link dt.html
 - KHÔNG mở index.html bằng cách double-click (file://) →
   điện thoại sẽ không mở được link. Phải chạy web server.
 - Máy trình chiếu phải mở bằng địa chỉ mà ĐT VÀO ĐƯỢC:
