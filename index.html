@@ -409,8 +409,9 @@
     transform: scale(1.1);
   }
 
-  /* Ẩn con trỏ chuột: điều khiển hoàn toàn bằng phím tắt, lia chuột không hiện chữ ký */
-  * { cursor: none !important; }
+  /* TẠM TẮT ẩn con trỏ: quay lại điều khiển bằng CHUỘT như trước.
+     Muốn ẩn con trỏ trở lại (chỉ phím tắt) → uncomment dòng dưới:
+  * { cursor: none !important; } */
 
   .fullscreen-toggle {
     position: fixed;
@@ -2488,11 +2489,14 @@ document.querySelectorAll('.control-bar .ctrl-btn, .start-overlay .start-btn-big
   btn.addEventListener('mouseenter', soundHoverBtn);
 });
 
-// ============ PHÍM TẮT ĐIỀU KHIỂN ============
+// ============ PHÍM TẮT ĐIỀU KHIỂN (TẠM TẮT) ============
+// BẬT LẠI: đổi SHORTCUTS_ON = true (kèm bật lại CSS "* { cursor: none }" ở trên nếu muốn)
 // Enter: Bắt đầu | ←: Câu trước | →: Câu tiếp | K: Kết thúc
 // R: Chọn bộ câu hỏi (mở panel) & Ngẫu nhiên (khi panel đang mở)
 // A/B/C/D: chọn đáp án | F: Toàn màn hình | Esc: Thoát toàn màn hình / Đóng panel
+const SHORTCUTS_ON = false;   // false = chỉ dùng chuột (như trước đây)
 document.addEventListener('keydown', function(e) {
+  if (!SHORTCUTS_ON) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   // Đang gõ trong ô nhập (tên đội / đường dẫn dt.html) → bỏ qua mọi phím tắt
   const ae = document.activeElement;
