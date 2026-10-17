@@ -3250,14 +3250,14 @@ function questionPayload() {
 function sendTo(conn, msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) {} }
 function broadcastMsg(msg) { allConns.slice().forEach(c => sendTo(c, msg)); }
 function sendStateTo(conn) {
-  if (quizActive && !startIsOpen() && !overlayShown('setPanelOverlay') && !overlayShown('finishOverlay')) {
+  if (quizActive && pendingSetIndex === null && !startIsOpen() && !overlayShown('setPanelOverlay') && !overlayShown('finishOverlay')) {
     sendTo(conn, questionPayload());
   } else {
     sendTo(conn, { type: 'clear' });
   }
 }
 function broadcastCurrentState() {
-  if (quizActive && !startIsOpen() && !overlayShown('setPanelOverlay') && !overlayShown('finishOverlay')) {
+  if (quizActive && pendingSetIndex === null && !startIsOpen() && !overlayShown('setPanelOverlay') && !overlayShown('finishOverlay')) {
     broadcastMsg(questionPayload());
   } else {
     broadcastMsg({ type: 'clear' });
@@ -3293,7 +3293,7 @@ function onPhoneData(conn, d) {
 function onTeamAnswer(d) {
   const t = d.team;
   if (TEAM_KEYS.indexOf(t) === -1) return;
-  if (!quizActive || startIsOpen() || overlayShown('setPanelOverlay') || overlayShown('finishOverlay')) return;
+  if (!quizActive || pendingSetIndex !== null || startIsOpen() || overlayShown('setPanelOverlay') || overlayShown('finishOverlay')) return;
   if (d.qid !== qidNow()) return;                       // câu cũ → bỏ qua
   if (typeof d.choice !== 'number' || d.choice < 0 || d.choice > 3) return;
   if (isAnswered) return;                               // đã công bố đáp án → khóa
