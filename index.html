@@ -2157,8 +2157,18 @@ function randomPickSet() {
 function enterSet(setIndex) {
   if (finishedSets.includes(setIndex)) return;
   document.getElementById('setPanelOverlay').classList.remove('show');
+  // ===== BO DE MOI → DIEM 4 DOI VE 0 =====
+  // Diem chi tinh tu cau 1 den cau cuoi cua tung bo de; sang bo khac tinh lai tu dau.
+  TEAM_KEYS.forEach(k => { teamScores[k] = 0; teamCorrects[k] = 0; });
+  // Xoa ket qua cac cau cua bo nay (neu da tung thi do) de bat dau lai tu cau 1 sach
+  Object.keys(answerLog).forEach(key => {
+    if (key.indexOf(setIndex + '-') === 0) delete answerLog[key];
+  });
   pendingSetIndex = setIndex;   // chờ người dẫn đóng panel kết nối → mới vào câu 1
   document.getElementById('roomOverlay').classList.add('show');
+  renderTeamStrip();
+  broadcastMsg(teamsPayload());   // DT nhan diem 0 ngay khi sang bo moi
+  broadcastClear();               // DT ve man cho, bo cau hoi cua bo truoc
   refreshRoomPanel();
 }
 function startPendingSet() {
@@ -2822,8 +2832,10 @@ function escapeHtml(s) {
 }
 
 let teamNames = Object.assign({ A: 'Đội A', B: 'Đội B', C: 'Đội C', D: 'Đội D' }, lsGetJSON('uktt_team_names', {}));
-let teamScores = Object.assign({ A: 0, B: 0, C: 0, D: 0 }, lsGetJSON('uktt_team_scores', {}));
-let teamCorrects = Object.assign({ A: 0, B: 0, C: 0, D: 0 }, lsGetJSON('uktt_team_corrects', {}));  // so cau tra loi DUNG (tinh lap)
+// Diem & so cau dung CHI TINH TRONG BO DE HIEN TAI (tu cau 1 den cau cuoi).
+// Khong doc tu localStorage nua (truoc do keo diem cua lan thi truoc) + reset ve 0 khi vao bo moi.
+let teamScores = { A: 0, B: 0, C: 0, D: 0 };
+let teamCorrects = { A: 0, B: 0, C: 0, D: 0 };  // so cau tra loi DUNG trong bo nay
 let teamConns = {};          // 'A'..'D' → DataConnection đang mở
 let allConns = [];           // mọi kết nối điện thoại đang có
 let hostPeer = null;
@@ -2858,7 +2870,7 @@ function renderTeamStrip() {
     const statusEl = card.querySelector('.team-status');
     const scoreEl = card.querySelector('.team-score');
     nameEl.textContent = teamNames[k] || ('Đội ' + k);
-    scoreEl.textContent = teamScores[k] > 0 ? teamScores[k] + ' điểm' : '';
+    scoreEl.textContent = teamScores[k] + ' điểm';   // luon hien tong diem (bat dau tu 0)
     card.classList.remove('correct', 'wrong');
     const on = isConnOpen(teamConns[k]);
     card.classList.toggle('connected', on);
