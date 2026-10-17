@@ -1,4 +1,4 @@
-HỘI THI CÁN BỘ KIỂM TRA GIỎI - XÃ TRIỆU VIỆT VƯƠNG 2026
+HỘI THI CÁN BỘ KIỂM TRA GIỎI - XÃ TRIỆU VIỆT VƯƠNG 2027
 
 ══════════════════════════════════════════════
 📂 TRONG GÓI:
