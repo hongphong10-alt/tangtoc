@@ -3244,7 +3244,8 @@ function questionPayload() {
     options: q.options,
     correct: resolved ? q.correct : null,
     resolved: resolved,
-    results: (rec && rec.teams) ? rec.teams : {}
+    results: (rec && rec.teams) ? rec.teams : {},
+    scores: teamScores          // tong diem cong don moi nhat — phone cap nhat thoi gian thuc
   };
 }
 function sendTo(conn, msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) {} }

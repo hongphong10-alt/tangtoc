@@ -654,6 +654,7 @@ function onHostData(d) {
     return;
   }
   if (d.type === 'question') {
+    if (d.scores) scores = d.scores;   // tong diem cong don cap nhat thoi gian thuc
     const isNew = !cur || cur.qid !== d.qid;
     if (isNew) { myPick = null; qStartTs = Date.now(); }
     cur = d;
