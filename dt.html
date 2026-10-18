@@ -425,7 +425,7 @@ function show(id) {
   const el = $(id);
   if (el) el.classList.add('show');
 }
-function fmtSec(s) { return (Math.round((Number(s) || 0) * 10) / 10).toFixed(1).replace('.', ',') + ' giây'; }
+function fmtSec(s) { return (Math.round((Number(s) || 0) * 100) / 100).toFixed(2).replace('.', ',') + ' giây'; }   // 2 so thap phan
 function setNet(state, text) {
   const c = $('netChip');
   c.className = 'net-chip ' + (state === 'ok' ? 'ok' : state === 'bad' ? 'bad' : '');

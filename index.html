@@ -2853,8 +2853,8 @@ function saveAnswerState(key, wrongs, answered) {
   const prev = answerLog[key] || {};
   answerLog[key] = { wrongs: wrongs, answered: answered, teams: prev.teams || {}, pointsAwarded: !!prev.pointsAwarded };
 }
-function fmtSec(s) { return (Math.round((Number(s) || 0) * 10) / 10).toFixed(1).replace('.', ',') + ' giây'; }
-function fmtLive(x) { return (Math.round((Number(x) || 0) * 10) / 10).toFixed(1).replace('.', ','); }
+function fmtSec(s) { return (Math.round((Number(s) || 0) * 100) / 100).toFixed(2).replace('.', ',') + ' giây'; }   // 2 so thap phan (tran de 2 doi cung hien 7,5 giây)
+function fmtLive(x) { return (Math.round((Number(x) || 0) * 100) / 100).toFixed(2).replace('.', ','); }
 function qidNow() { return currentSet + '-' + currentIdx; }
 function isConnOpen(c) { return !!(c && c.open); }
 function teamCount() { return TEAM_KEYS.filter(k => isConnOpen(teamConns[k])).length; }
@@ -3319,7 +3319,7 @@ function onTeamAnswer(d) {
 
   const sec = Math.max(0, (Date.now() - (questionStartTs || Date.now())) / 1000);
   const correct = d.choice === q.correct;
-  rec.teams[t] = { choice: d.choice, correct: correct, sec: Math.round(sec * 10) / 10 };
+  rec.teams[t] = { choice: d.choice, correct: correct, sec: Math.round(sec * 100) / 100 };   // luu 2 so thap phan de xep hang khong hoa
 
   const opts = document.querySelectorAll('.opt');
 
